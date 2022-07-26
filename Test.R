@@ -38,7 +38,7 @@ levels(data$DiffWalking) =  c("Yes","No")
 
 data <- data %>% mutate(Stroke  = ifelse(data$Stroke  == "Yes",1,0))
 levels(data$Stroke) =  c("Yes","No")
-
+sdfsdfsdfsdfsdf
 adc <- data[-c(1,3,7,8,11,12,15)]
 
 adc[,1]
@@ -54,12 +54,12 @@ rownames(corrr) <- names(data2)
 corrr <- round(corrr,2)
 #There diff methods to get corr plot
 #1
-cor1 <- corrplot::corrplot(corrr)
+corrplot::corrplot(corrr)
 
 
 #2
-palette = colorRampPalette(c("green", "white", "red")) (19)
-cor2 <- heatmap(x = corrr, col = palette, symm = TRUE)
+palette = colorRampPalette(c("green", "white", "red"))(20)
+heatmap(x = corrr, col = palette, symm = TRUE)
 
 
 
@@ -102,8 +102,8 @@ plotrix::color2D.matplot(corrr,
                 vcex = .6,
                 axes = FALSE
   )
-axis(1,1:19-.5, 1:19, cex.axis = .8) ## draw x-axis
-axis(2, 19:1 - .5, 1:19, cex.axis = .8, las = 2)+
+axis(1,1:18-.5, 1:18, cex.axis = .8) ## draw x-axis
+axis(2, 18:1 - .5, 1:18, cex.axis = .8, las = 2)+
   theme(axis.text.x = element_text(angle= 90, hjust = 1))## draw y-axis+
 
 
