@@ -1,0 +1,577 @@
+---
+title: "Prediction of Heart Disease Risk : Presentation "
+author: "Öcal Kaptan(TU), Pavlo Nikitenko(UDE), Sunyoung JI(TU)"
+cols_authors: 4
+subtitle: "Statistical Learning"
+deadline: "15.09.2022"
+type: "Presentation"
+date: "30.08.2022"
+supervisor: "Dr. Thomas Deckers"
+output:
+  pdf_document:
+    keep_tex: yes
+    template: template.tex
+    fig_caption: yes
+    citation_package: biblatex
+    number_sections: true
+toc: true
+lot: true
+lof: true
+graphics: true
+biblio-title: References
+fontsize: 11pt
+geometry: lmargin=2.5cm,rmargin=2.5cm,tmargin=2.5cm,bmargin=2.5cm
+biblio-files: references.bib
+classoption: a4paper
+---
+
+<!-- % Template Version 1.1 -->
+<!-- below function does some formatting for images; leave this untouched unless you know better :-) -->
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+crop <- function(im, left = 0, top = 0, right = 0, bottom = 0) {
+  d <- dim(im[[1]]); w <- d[2]; h <- d[3]
+  image_crop(im, glue::glue("{w-left-right}x{h-top-bottom}+{left}+{top}"))
+}
+```
+
+```{r library, include=FALSE}
+library(magick)
+library(tidyverse)
+library(stargazer)
+library(gbm)
+library(class)
+library(Formula)
+library(lattice)
+library(earth)
+library(klaR)
+library(mda)
+library(readr)
+library(readxl)
+library(caret)
+library(tidymodels)
+library(MASS)
+library(forecast)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(latexpdf)
+library(magick)
+library(tidyverse)
+library(stargazer)
+library(gbm)
+library(class)
+library(Formula)
+library(lattice)
+library(earth)
+library(klaR)
+library(mda)
+library(readr)
+library(caret)
+library(tidymodels)
+library(MASS)
+library(forecast)
+library(randomForest)
+library(randomForestExplainer)
+library(rpart)
+library(rpart.plot)
+library(leaps)
+library(e1071)
+library(FNN) 
+library(gmodels) 
+library(psych)
+library(boot)
+library(pROC)
+library(ranger)
+
+#data <- read_csv("Heart_Train.csv")
+data_new <- read_csv("Heart_Test.csv")
+data_new <- data_new[,-1]
+```
+
+
+
+
+# Introduction
+
+* The purpose  is to analyze the ”HeartDisease” dataset and make predictions of heart disease risk of persons. In the dataset, the response variable `HeartDisease` which is a binary outcome that consist of "Yes" and "No".
+
+* The methods below that used for classification problems:
+** Logistic Regression
+** Discriminant Analysis
+** Decision Tree 
+** Gradient Boosting Machine 
+** Random Forest 
+
+* Dataset has splitted into traning and test dataset.
+
+* All models checked and compared by using the accuracy rate as performance measure.
+
+* The mising values, correlation between variables and variables without predictive power checked in the section "Data Pre-processing".
+
+ 
+# Data Pre-processing
+The  dataset has 19 predictors and the response variable `HeartDisease` has 287816 persons. The processes below that used to tidy up the dataset :
+
+1. In te first step all predictors are checked for missing values. There are no missing values in the dataset.
+
+2. Second, each variables have checked in respective probability of having `HeartDisease` risk.
+The probability of having HD if `AlcoholDrinking`  $=$ "Yes" is  0.08 and  0.05 for if it is "No". There is no such a big difference thats why `AlcoholDrinking` is removed. Same as the variable `Race` check with same way and removed. 
+
+
+```{r, echo=FALSE}
+#Removing the variables AlcoholDrinking and Race.
+
+data_new <- data_new[,-c(4,11)]
+```
+
+
+3. Third, some predictors converted and defined to new classes as below :
+ 
+  i) `AgeCategory` is  converted to 3 classes which are "Youth","Adults" and "Seniors".
+  ii) ` GenHealth` is coverted to 4 classes which are "Poor","Fair","Good", "Excellent"
+  iii) `MentalHealth ` converted to 3 classes which are "Bad","Fair","Good".
+  iv) `BMI`and `SleepTime` normalized.
+  v) All the character types of predictors converted into factors. This convertion was necessary for the next step. 
+
+```{r, echo=FALSE}
+normal <- function(x){
+  x <- (x-mean(x))/sd(x)
+  return(x)
+}
+data1_new <- data_new %>% mutate(
+  AgeCategory = ifelse(AgeCategory == "18-24","Youth",
+         ifelse(AgeCategory == "65-69","Seniors",
+        ifelse(AgeCategory == "70-74","Seniors",
+        ifelse(AgeCategory == "75-79","Seniors",
+        ifelse(AgeCategory== "80 or older","Seniors","Adults"))))),
+         BMI = normal(BMI),
+         GenHealth = ifelse(GenHealth == "Poor","Poor",
+           ifelse(GenHealth == "Fair","Fair",
+       ifelse(GenHealth == "Good","Good","Excellent"))),
+       PhysicalHealth = ifelse(PhysicalHealth >= 20, "Bad",
+           ifelse(PhysicalHealth  <= 10,"Good","Fair")),
+      MentalHealth = ifelse(MentalHealth >= 20, "Bad",
+                     ifelse(MentalHealth  <= 10,"Good","Fair")),
+                        SleepTime= normal(SleepTime))
+                    
+
+
+data1_new
+
+data1_new <- data1_new%>% mutate_if(is.character,as.factor)
+```
+
+
+
+4. Forth, the dummy transformation was necessary to use the models. After the dummy transformation, correlation between the dummies are checked.In case of high correlation,the variable with higher the mean absolute correlation (MAC) would removed. Here there was no highly correlated variables.
+
+```{r, echo=FALSE}
+dummy<-dummyVars("~.",data=data1_new[,-1], fullRank=TRUE) 
+ dataset_new<-data.frame(predict(dummy, newdata=data1_new[,-1] ))
+ test_new<-cbind(HeartDisease=data1_new[,1], dataset_new)
+```
+
+
+
+# Model Selection and Training
+ In this section dataset splitted into traning and pre-test part. After the seperation, `regsubsets()` function used on training data set to find best parameters for the models. We get eleven predictors:
+ 
+```{r, echo=FALSE}
+subset_selection <- function(data,max_var=NULL,method=NULL){
+  if(method == "NULL"){
+    reg <<- regsubsets(HeartDisease~., data = data, nvmax = max_var)
+  } else {
+    reg <<- regsubsets(HeartDisease~., data = train, nvmax = max_var,
+                       method = method)
+  }
+  reg_summary <- summary(reg)
+  
+  measures<-tibble(variables=1:max_var,
+                   CP=reg_summary$cp,
+                   BIC=reg_summary$bic,
+                   Adj.R2=reg_summary$adjr2) %>%
+    pivot_longer(2:4, names_to = "measures")
+
+  # compute optimal numbers of variables along with standard errors of measures
+  stats<-measures %>%
+    group_by(measures) %>%
+    mutate(optimal= case_when(measures=="CP"~min(value),
+                              measures=="BIC"~min(value),
+                              measures=="Adj.R2"~max(value)),
+           SD=sd(value)) %>%
+    filter(value==optimal)
+  # visualization
+  vis <- ggplot(measures, aes(x=factor(variables), y=value, group=1))+
+    geom_line(color="steelblue", size=1)+
+    geom_hline(data = stats, aes(yintercept=optimal+0.2*SD),
+               linetype="dashed", color="red")+
+    geom_hline(data = stats, aes(yintercept=optimal-0.2*SD),
+               linetype="dashed", color="red")+
+    labs(x="Number of Variables")+
+    facet_wrap(~measures, scales = "free_y", ncol=1)
+  return(vis)
+}
+```
+ 
+```{r, echo=FALSE}
+forward <- subset_selection(data =train,max_var = 22, method="forward")
+coefi<-coef(reg, id=11)
+name_vars1<-names(coefi)[-c(1)]
+
+backward <-  subset_selection(data =train,max_var = 21,method="backward")
+coefi<-coef(reg, id=11)
+name_vars2<-names(coefi)[-c(1)]
+ 
+normal <-  subset_selection(data =train,max_var = 21,method="NULL")
+coefi<-coef(reg, id=11)
+name_vars3<-names(coefi)[-c(1)]
+
+forward
+
+```
+
+```{r, echo=FALSE}
+
+Parameters <- matrix(c(name_vars1,name_vars2,name_vars3),ncol=3)
+colnames(Parameters) <- c("Forward","Backward","Normal")
+Parameters
+```
+
+# Modelling Approach
+For the  modelling approach, upsampling method is used with  repeated cross validation. Upsampling methods replicates the observations from minority class to balance the data. Also, `Repeated Cross-Validation is used with  3 times repeat and 10-fold to find the optimal. 
+```{r}
+set.seed(123)
+folds<-createMultiFolds(y=train$HeartDisease, k=10, times = 3)
+```
+
+# Evaluation function
+
+- Evaluation function for Tree-based models
+```{r}
+EvalTrain_Tree<-function(model, newdata, dep.var){
+  pred.resp<-predict(object = model, newdata = newdata, type="prob")
+  pred<-ifelse(test = pred.resp[,"Yes"] >0.5, yes = "Yes",no="No")
+  cf.mat<-table(predciton=factor(pred, levels = c("No","Yes")),
+                reference=factor(newdata[,dep.var],levels = c("No","Yes")))
+  Accuracy<-sum(diag(cf.mat))/sum(cf.mat)
+  Error_Rate<-1-Accuracy
+  TPR<-cf.mat[2,2]/sum(cf.mat[,2])
+  FNR<-1-TPR
+  TNR<-cf.mat[1,1]/sum(cf.mat[,1])
+  FPR<-1-TNR
+  Auc<-roc(response=newdata[,dep.var], predictor=pred.resp[,"Yes"])$auc
+  out<-list(cf.mat=cf.mat, Accuracy=Accuracy, Error_Rate=Error_Rate, TPR=TPR,
+            FNR=FNR, TNR=TNR, FPR=FPR, Auc=Auc)
+  return(out)
+}
+```
+
+# Creating Train and Test sets
+
+```{r}
+set.seed(123)
+train.id<-createDataPartition(y=dataset$HeartDisease,
+                              times = 1, p=0.8, list = F)
+train<-dataset[train.id,]
+test<-dataset[-train.id,]
+```
+
+## Logistic Regression
+Logistic Regression ensures that our estimate lies between 0 and 1. Moreover, logistic regression
+uses Maximum likelihood to seek estimates which corresponds as closely as possible to the
+individual observed HeartDiesease levels. The likelihood gives the probability of the observed
+zeros and ones in our case and finds estimates to maximize the likelihood of the observed data. For logsitc regression we used the 11 best predictors chosen by susbet selection. As performance measure is used not only the accuracy rate, but also True Postiv Rate (TPR), True Negative Rate (TNR) and Area under the Curve (AUC).
+```{r, echo=FALSE}
+EvalTrain(model = mod3$finalModel, newdata = train, dep.var = "HeartDisease")
+```
+After building the model and fit on train data set, the accuracy of the final model is about 75,5%. The TPR (how many Yes's we predicted rigth) is 74,7%. The TNR (how many NO's we predicted right) is about 75,6%. The Are under the Curve is 82,5%. It seems to be that the best logistic regressions performs very well for both levels and we have a really high AUC.
+```{r}
+EvalTrain(model = mod3$finalModel, newdata = test_new, dep.var = "HeartDisease")
+```
+Now use the new test data set wtih our model we get:
+Accuracy 75,5%
+-TPR 73,9%
+-TNR 75,6%
+-AUC 82,2%
+So we get a really good performance on the new unknow data set to correctly predict both levels of the heart disease.
+
+
+
+
+
+## Discriminant Analysis
+* For discriminant analysis 3 models are used as below:
+
+ i) Linear Discriminant analysis(LDA):
+ `LDA` assumes that predictors are normally distributed  (Gaussian distribution) and the different classes have class-specific means and equal variance/covariance.
+  The accuracy for `LDA` by using the predictors from subset selection  process obtained as 74%. But when we tried to use `LDA` on full dataset and remove the unsignificant predictors, we achivied 76% of accuracy. That's why subset selection is not used for `LDA`.
+ 
+ ii) Quadratic Discriminat Analysis (QDA):
+ QDA is little bit more flexible than LDA, in the sense that it does not assumes the equality of variance/covariance. In other words, for QDA the covariance matrix can be different for each class.
+ 
+ For `QDA` the predictors from subset selection process are used. QDA get a accuracy of 81,72%
+ 
+ iii)Flexible Discriminant Analysis (FDA):
+ `FDA` is a flexible extension of LDA that uses non-linear combinations of predictors such as splines.
+ 
+ `FDA` model get a accuracy of 76,40%.
+ 
+```{r}
+aa <- list(lda=lda,qda=qda,fda=fda)
+
+#Lets collect all the results together
+result <- resamples(aa) 
+ggplot(result)+
+  labs(y="Accuracy")+theme_linedraw()
+
+```
+
+
+## Decision/Classification Tree
+This method involves segmenting the predictor space into a number of single regions. Since the
+set of splitting rules used to segment the predictor space can be summarized in a tree.
+It is important to find the optimal tree size, since a to large tree with to many splits
+overfits the data and performances bad on the test dataset.
+```{r, echo=FALSE}
+par(mar=c(1,1,1,1))
+plot(tree2$finalModel)
+text(tree2$finalModel, cex=0.4)
+```
+
+```{r}
+EvalTrain_Tree(model = tree2$finalModel, newdata = train, dep.var = "HeartDisease")
+```
+Again, fit on train data set, the accuracy of the best tree model is about 70,3%. The TPR (how many Yes's we predicted right) is 80,5%. The TNR (how many No's we predicted right) is about 69,4%. The Are under the Curve is 79,2%. 
+```{r}
+tree2$bestTune
+```
+The optimal cp is 0.001.
+```{r}
+EvalTrain_Tree(model = tree2$finalModel, newdata = test_new, dep.var = "HeartDisease")
+
+```
+Now use the new test data set with our model and get:
+Accuracy 70,1%
+-TPR 79,5%
+-TNR 69,2%
+-AUC 78,7%
+So we get a really good performance on the new unknow data set of TPR and a little bit less TNR. It seems to be that the best classification tree performs slightly worse on train and new test data set than for example the best logstic regression model.
+
+## Gradient Boosting Machine 
+
+Gradient Boosting Machine Model is sensitive for grids, thus it is critical to find proper grids.
+```{r}
+read_excel("gbm.xlsx")
+```
+
+```{r}
+
+# shrinkage
+nl = nrow(train)
+max(0.01, 0.1*min(1, nl/10000)) # 0.01
+
+# Max Value for interaction.depth
+floor(sqrt(NCOL(train))) # 5
+
+gbmGrid <-  expand.grid(n.trees = 300,
+                        interaction.depth = 1,
+                        n.minobsinnode = 30,
+                        shrinkage = 0.1)
+
+
+gbmControl <- trainControl(method = "repeatedcv",
+                           index=folds, sampling = "up")
+
+
+
+gbm_fit <- train(HeartDisease~
+                   Smoking.Yes+Stroke.Yes+DiffWalking.Yes+Sex.Male+
+                   AgeCategory.Seniors+Diabetic.Yes+GenHealth.Fair+
+                   GenHealth.Good+GenHealth.Poor+KidneyDisease.Yes+
+                   SkinCancer.Yes,
+                 data = train,
+                 method='gbm',
+                 trControl=gbmControl,
+                 tuneGrid = gbmGrid )
+
+
+gbm_fit$results
+
+gbm_pred <- predict(gbm_fit, newdata = test, type = "raw")
+test$HeartDisease <- as.factor(test$HeartDisease)
+
+
+gbm_varImp <- summary(gbm_fit) %>%
+  tibble()
+gbm_varImp
+
+Eval_gbm <- EvalTrain_Tree(model = gbm_fit, newdata = test,
+                           dep.var = "HeartDisease")
+Eval_gbm
+
+
+
+```
+
+## Random Forest 
+
+In the classification of `Heart_Test`, Random Forest has advantage that random forest prevents over-fitting problem by creating trees of different sizes in subsets and combining results. 
+
+- grid searcg for Random Forest model
+
+```{r}
+
+
+valid_split <- initial_split(train, .8)
+valid_split_2 <- analysis(valid_split)
+
+# validation data
+grid_valid <- assessment(valid_split)
+x_test <- grid_valid[setdiff(names(grid_valid), "HeartDisease")]
+y_test <- grid_valid$HeartDisease
+
+oob_comp <- randomForest(
+  formula = HeartDisease ~ .,
+  data    = valid_split_2,
+  xtest   = x_test,
+  ytest   = y_test
+)
+
+# extract OOB & validation errors
+oob <- sqrt(oob_comp$err.rate[,1])
+validation <- sqrt(oob_comp$test$err.rate[,1])
+
+# compare error rates
+tibble::tibble(
+  `Out of Bag Error` = oob,
+  `Test error` = validation,
+  ntrees = 1:oob_comp$ntree
+) %>%
+  gather(Metric, RMSE, -ntrees) %>%
+  ggplot(aes(ntrees, RMSE, color = Metric)) +
+  geom_line() +
+  geom_vline(xintercept = 40) +
+  xlab("Number of trees")
+
+# names of features
+features <- setdiff(names(train), "HeartDisease")
+
+set.seed(123)
+
+tune <- tuneRF(
+  x          = train[features],
+  y          = train$HeartDisease,
+  ntreeTry   = 500,
+  mtryStart  = 5,
+  stepFactor = 1.5,
+  improve    = 0.01,
+  trace      = FALSE
+)
+tune
+```
+
+```{r}
+read_excel("rf.xlsx")
+```
+```{r}
+
+
+
+
+grid_ranger <- expand.grid(mtry = 5,
+                           splitrule = "gini",
+                           min.node.size = 3)
+
+control <- trainControl(method = "repeatedcv", index=folds, sampling="up")
+
+
+rf_train_ranger <- train(HeartDisease~
+                           Smoking.Yes+Stroke.Yes+DiffWalking.Yes+Sex.Male+
+                           AgeCategory.Seniors+Diabetic.Yes+GenHealth.Fair+
+                           GenHealth.Good+GenHealth.Poor+KidneyDisease.Yes+
+                           SkinCancer.Yes,
+                         data = train,
+                         method = "ranger",
+                         trControl = control,
+                         tuneGrid = grid_ranger,
+                         importance = "impurity",
+                         num.trees = 75)
+
+rf_pred <- predict(rf_train_ranger,test, type="raw")
+confusionMatrix(rf_pred,test$HeartDisease)
+Importance_of_Variables <- varImp(rf_train_ranger, scale = FALSE)
+plot(Importance_of_Variables, main = "Importance of Variables")
+
+
+cf.mat<-table(predciton=rf_pred,
+              reference=test$HeartDisease)
+Accuracy<-sum(diag(cf.mat))/sum(cf.mat)
+Error_Rate<-1-Accuracy
+TPR<-cf.mat[2,2]/sum(cf.mat[,2])
+FNR<-1-TPR
+TNR<-cf.mat[1,1]/sum(cf.mat[,1])
+FPR<-1-TNR
+
+Evaluation_RF<-list(cf.mat=cf.mat, Accuracy=Accuracy,
+                    Error_Rate=Error_Rate, TPR=TPR,
+                    FNR=FNR, TNR=TNR, FPR=FPR)
+
+Evaluation_RF
+```
+
+# Evaluation
+
+* Concluding, the models measured on the train and new test set. Performance of the new test set shown below. 
+
+```{r echo=FALSE}
+conf_list <- list(Lreg = confusionMatrix(predict(mod3,test_new),
+        test_new$HeartDisease),
+   LDA = confusionMatrix(predict(lda,test_new),
+     test_new$HeartDisease),
+    QDA=confusionMatrix(predict(qda,test_new),
+    test_new$HeartDisease),
+   FDA=confusionMatrix(predict(fda,test_new),
+test_new$HeartDisease),
+Decision_Tree =confusionMatrix(predict(tree2,test_new),
+test_new$HeartDisease),
+Random_For=confusionMatrix(predict(rf_train_ranger,test_new),
+test_new$HeartDisease),
+GBM = confusionMatrix(predict(gbm_fit,test_new),
+test_new$HeartDisease))
+
+con_list_res <- sapply(conf_list,function(x) x$byClass)
+
+accury <- c() 
+
+collect_acc <- function(x){
+for (i in 1:length(x)) {
+accury[i] <- x[[i]][[3]][[1]]
+}
+names(accury) <- c("LogReg","LDA","QDA","FDA",
+"Dec.Tree","RandomF","GBM")
+return(accury)
+}
+Accuracy <- collect_acc(conf_list)
+
+TrainedSet_Accuracy <- c()
+TrainedSet_Accuracy[1]<- mod3$results[[2]]
+TrainedSet_Accuracy[2]<- lda$results[[2]]
+TrainedSet_Accuracy[3]<- qda$results[[2]]
+TrainedSet_Accuracy[4]<- max(fda$results[[3]])
+TrainedSet_Accuracy[5]<-  max(tree2$results$Accuracy)
+TrainedSet_Accuracy[6]<- rf_train_ranger$results[[4]]
+TrainedSet_Accuracy[7]<- gbm_fit$results[[5]]
+
+
+
+pred_table <- data.frame(rbind(con_list_res,Accuracy,TrainedSet_Accuracy))%>%knitr::kable()
+pred_table
+
+```
+
+
+
+
