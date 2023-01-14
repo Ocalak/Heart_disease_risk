@@ -1,36 +1,10 @@
 Readme
-#We have scheduled a meeting on 2nd of Aug at 12:00.
-
-#Until the next meeting,we will try to figure out(find a solution) the topics 1,2 and 3.
-
-#You have access to use Öcal`s github : https://github.com/Ocalak/Heart_disease_risk
-
-#REadme <- Here I publish the useful links, books etc for the project 
-#Test.R <- Share the code here.
-#You can add new folder and change the things there. 
-
-
-
-
-
 #Topics
 #1) Data check for NA's
 #2)Find out how to manipulate the data.
-  #) Mutate the variables as factor and check the levels
-     # check how can we use the some variables with more than 2 levels.
-       # An example AgeCategory has 13 levels. How can we convert it ? 
-         # I used ; 
-           #   data2 <- data %>% mutate_if(is.character,as.factor)
-           #   data2$AgeCategory <- unclass(data2$AgeCategory) ##'Try it to see'##
-           # Question is did I do the right thing? Can I use it like that? if yes how? 
-
-#3)Lets say we manipulated the data. Lets find out which predicters to use which to drop?
+#3)LThe data is manipulated, then find out which predictors to use which to drop?
     # Check interactions of highly corr predicter
-    #Check if we combine the predicters, Exp ; Diabetic * GenHeath 
-    
-
 #4)choose correct model
-  # for that we have many options but we should try all the models to find which is best
    #Logistic Reg
    #KNN
    #Naive Bayes
@@ -38,14 +12,7 @@ Readme
    #etc...
 
 
-Here I publish the links textbooks or anything that might help us for the project.
-Feel free to add the things.
-
-
-Firt of all I was spying the Martin's github account. And I found many things there.
-Check it : https://github.com/mca91
-
-
+Here I publish the links textbooks or anything that might help  for the project.
 
 Here is 2nd edition of An Introduction to Statistical
 Learning with Applications in R textbook
