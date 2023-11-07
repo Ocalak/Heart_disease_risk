@@ -6,7 +6,7 @@ library(DescTools)
 library(car)
 library(leaps)
 
-# read the data
+# read the dataffddd
 Heart<-read.csv(here("Heart/Heart_Train.csv"))
 
 # overview about the data
